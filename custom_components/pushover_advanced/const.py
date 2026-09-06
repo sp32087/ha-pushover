@@ -24,6 +24,7 @@ API_SOUNDS_URL = f"{API_BASE_URL}/sounds.json"
 API_RECEIPT_URL = f"{API_BASE_URL}/receipts/{{receipt}}.json"
 API_CANCEL_RECEIPT_URL = f"{API_BASE_URL}/receipts/{{receipt}}/cancel.json"
 API_CANCEL_BY_TAG_URL = f"{API_BASE_URL}/receipts/cancel_by_tag/{{tag}}.json"
+API_GROUP_URL = f"{API_BASE_URL}/groups/{{group}}.json"
 
 ATTR_MESSAGE = "message"
 ATTR_TITLE = "title"

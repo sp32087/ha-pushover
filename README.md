@@ -48,6 +48,25 @@ Open the integration's **Configure** dialog to set sending defaults (default
 device, priority, sound, TTL, emergency retry/expire) and to register
 per-device encryption secrets.
 
+**Device names, group members, and sounds are pulled live from your
+account** wherever the options dialog needs them (device/sound dropdowns
+still accept a custom value if you'd rather type one):
+
+- Device names come from `/1/users/validate.json`, which lists the devices
+  registered to a plain user key.
+- If your configured key is a **group** key rather than a user key, the
+  integration also queries `/1/groups/{group}.json` and adds each member's
+  device to the same dropdown (Pushover doesn't expose a registry of your
+  *group names* beyond that one group's own name/member list — there's no
+  "list all my groups" endpoint, so you still need to know which group key
+  you're using).
+- Sounds come from `/1/sounds.json`, so paid/custom sounds on your account
+  show up automatically, not just the built-in set.
+
+Both lookups are best-effort: if Pushover is unreachable when you open the
+dialog, the fields fall back to a plain text box / a hardcoded sound list
+rather than blocking you.
+
 ## Services
 
 ### `pushover_advanced.send_message`
