@@ -8,6 +8,8 @@ which are exposed by Home Assistant's built-in Pushover integration.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 from pathlib import Path
 
@@ -26,6 +28,7 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import PushoverClient, PushoverMessage
 from .const import (
+    ALLOWED_ATTACHMENT_TYPES,
     ATTR_ATTACHMENT,
     ATTR_ATTACHMENT_BASE64,
     ATTR_ATTACHMENT_TYPE,
@@ -115,7 +118,7 @@ SEND_MESSAGE_SCHEMA = vol.Schema(
         ),
         vol.Optional(ATTR_ATTACHMENT): cv.isfile,
         vol.Optional(ATTR_ATTACHMENT_BASE64): cv.string,
-        vol.Optional(ATTR_ATTACHMENT_TYPE): cv.string,
+        vol.Optional(ATTR_ATTACHMENT_TYPE): vol.In(ALLOWED_ATTACHMENT_TYPES),
         vol.Optional(ATTR_ENCRYPT, default=False): cv.boolean,
     }
 )
@@ -276,7 +279,19 @@ async def _async_handle_send_message(hass: HomeAssistant, call: ServiceCall) -> 
         attachment_bytes = await hass.async_add_executor_job(Path(path).read_bytes)
         if len(attachment_bytes) > MAX_ATTACHMENT_BYTES:
             raise HomeAssistantError(
-                f"Attachment exceeds Pushover's {MAX_ATTACHMENT_BYTES} byte limit."
+                f"Attachment exceeds Pushover's {MAX_ATTACHMENT_BYTES} byte "
+                f"({MAX_ATTACHMENT_BYTES / 1_048_576:.1f} MB) limit."
+            )
+
+    if ATTR_ATTACHMENT_BASE64 in data:
+        try:
+            decoded_size = len(base64.b64decode(data[ATTR_ATTACHMENT_BASE64], validate=True))
+        except (binascii.Error, ValueError) as err:
+            raise HomeAssistantError(f"attachment_base64 is not valid base64: {err}") from err
+        if decoded_size > MAX_ATTACHMENT_BYTES:
+            raise HomeAssistantError(
+                f"attachment_base64 decodes to {decoded_size} bytes, which exceeds "
+                f"Pushover's {MAX_ATTACHMENT_BYTES} byte ({MAX_ATTACHMENT_BYTES / 1_048_576:.1f} MB) limit."
             )
 
     message = PushoverMessage(

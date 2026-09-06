@@ -24,13 +24,26 @@ automations, using each account's configured defaults.
 
 ### HACS
 
-Add this repository as a custom repository in HACS (category: Integration),
-then install "Pushover Advanced" and restart Home Assistant.
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=sp32087&repository=ha-pushover&category=integration)
+
+This repository ([`sp32087/ha-pushover`](https://github.com/sp32087/ha-pushover))
+isn't in the default HACS store, so it needs to be added as a custom
+repository first:
+
+1. Click the badge above (opens HACS directly to this repository), **or**
+   add it manually: HACS → the **⋮** menu (top right) → **Custom
+   repositories** → paste `https://github.com/sp32087/ha-pushover` →
+   category **Integration** → **Add**.
+2. Find **Pushover Advanced** in HACS and click **Download**.
+3. Restart Home Assistant.
+4. Go to **Settings → Devices & Services → Add Integration** and search for
+   **Pushover Advanced** (see [Setup](#setup) below).
 
 ### Manual
 
-Copy `custom_components/pushover_advanced` into your Home Assistant
-`config/custom_components/` directory and restart Home Assistant.
+Copy `custom_components/pushover_advanced` from this repository into your
+Home Assistant `config/custom_components/` directory and restart Home
+Assistant.
 
 ## Setup
 

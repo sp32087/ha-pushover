@@ -13,7 +13,7 @@ send_message:
           integration: pushover_advanced
     message:
       name: Message
-      description: The message body to send, up to 1024 characters.
+      description: The message body to send. 1 to 1024 characters.
       required: true
       example: "The garage door has been open for 10 minutes."
       selector:
@@ -22,10 +22,10 @@ send_message:
     title:
       name: Title
       description: >-
-        Message title, up to 250 characters. Defaults to your application's
-        name if omitted - except when encrypt is enabled, where it defaults
-        to "Home Assistant" instead, since Pushover's own plaintext default
-        title can't be decrypted by the receiving device.
+        Message title. 1 to 250 characters if given. Defaults to your
+        application's name if omitted - except when encrypt is enabled,
+        where it defaults to "Home Assistant" instead, since Pushover's own
+        plaintext default title can't be decrypted by the receiving device.
       example: "Garage door"
       selector:
         text:
@@ -51,34 +51,43 @@ send_message:
           mode: dropdown
     sound:
       name: Sound
-      description: Notification sound name (e.g. pushover, siren, cosmic, none).
+      description: >-
+        Notification sound name - any sound key from your account (see the
+        integration's options dialog for the current list) or a built-in one
+        such as pushover, siren, cosmic, or none.
       example: siren
       selector:
         text:
     url:
       name: URL
-      description: A supplementary URL to show with the message (must be a valid URL, up to 512 characters).
+      description: >-
+        A supplementary URL to show with the message. Must be a valid
+        http(s) URL, 1 to 512 characters.
       example: "https://home.example.com"
       selector:
         text:
     url_title:
       name: URL title
-      description: A title for the supplementary URL, in place of the raw URL (up to 100 characters).
+      description: A title for the supplementary URL, in place of the raw URL. 1 to 100 characters.
       example: "Open dashboard"
       selector:
         text:
     device:
       name: Device(s)
       description: >-
-        One or more device names to target. Required (and limited to exactly
-        one device) when encrypt is enabled.
+        One or more device names to target (see the integration's options
+        dialog for the current list of device names on your account).
+        Required (and limited to exactly one device) when encrypt is
+        enabled. Omit to send to all of the user/group's devices.
       example: ["iphone", "desktop"]
       selector:
         text:
           multiple: true
     timestamp:
       name: Timestamp
-      description: Unix timestamp to display instead of the time Pushover received the message.
+      description: >-
+        Unix timestamp (whole seconds since 1970-01-01 UTC), 0 or greater,
+        to display instead of the time Pushover received the message.
       selector:
         number:
           min: 0
@@ -96,9 +105,9 @@ send_message:
     ttl:
       name: Time to live
       description: >-
-        Seconds after which the message will automatically be deleted from the
-        device. Must be a positive number of seconds; ignored by Pushover for
-        priority 2 (emergency) messages.
+        Seconds after which the message will automatically be deleted from
+        the device. 1 second or greater (0 is not allowed). Ignored by
+        Pushover for priority 2 (emergency) messages.
       selector:
         number:
           min: 1
@@ -108,15 +117,17 @@ send_message:
       name: Tags
       description: >-
         Tags to attach to the message so pending emergency-priority copies of it
-        can later be cancelled in bulk with cancel_by_tag. 200 characters total
-        once combined.
+        can later be cancelled in bulk with cancel_by_tag. Up to 200 characters
+        total once combined with commas.
       example: ["garage-door", "security"]
       selector:
         text:
           multiple: true
     callback:
       name: Callback URL
-      description: URL Pushover will request when an emergency-priority (priority 2) message is acknowledged.
+      description: >-
+        A valid http(s) URL Pushover will request when an emergency-priority
+        (priority 2) message is acknowledged.
       selector:
         text:
     retry:
@@ -144,21 +155,33 @@ send_message:
           mode: box
     attachment:
       name: Attachment file path
-      description: Local path (must be in an allowed directory) to an image to attach.
+      description: >-
+        Local path (must be in an allowed directory) to a JPEG, PNG, or GIF
+        image to attach, up to 5,242,880 bytes (5.0 MB). Cannot be combined
+        with attachment_base64.
       example: "/config/www/snapshot.jpg"
       selector:
         text:
     attachment_base64:
       name: Attachment (base64)
-      description: Base64-encoded attachment data, as an alternative to attachment.
+      description: >-
+        Base64-encoded JPEG, PNG, or GIF image data, as an alternative to
+        attachment. Decodes to at most 5,242,880 bytes (5.0 MB).
       selector:
         text:
     attachment_type:
       name: Attachment MIME type
-      description: MIME type of attachment_base64, e.g. image/jpeg.
+      description: >-
+        MIME type of attachment_base64. Must be one of: image/jpeg,
+        image/png, image/gif.
       example: "image/jpeg"
       selector:
-        text:
+        select:
+          options:
+            - image/jpeg
+            - image/png
+            - image/gif
+          mode: dropdown
     encrypt:
       name: Encrypt
       description: >-

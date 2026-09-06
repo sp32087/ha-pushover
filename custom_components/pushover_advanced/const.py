@@ -65,6 +65,7 @@ MAX_URL_LENGTH = 512
 MAX_URL_TITLE_LENGTH = 100
 MAX_TAGS_LENGTH = 200
 MAX_ATTACHMENT_BYTES = 5_242_880  # 5 MB, current Pushover attachment limit.
+ALLOWED_ATTACHMENT_TYPES = ["image/jpeg", "image/png", "image/gif"]
 
 DEFAULT_ENCRYPTED_TITLE = "Home Assistant"
 

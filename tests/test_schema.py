@@ -93,3 +93,20 @@ def test_rejects_invalid_url() -> None:
 def test_accepts_valid_url() -> None:
     result = SEND_MESSAGE_SCHEMA({"message": "hi", "url": "https://example.com"})
     assert result["url"] == "https://example.com"
+
+
+def test_rejects_invalid_callback_url() -> None:
+    with pytest.raises(vol.Invalid):
+        SEND_MESSAGE_SCHEMA({"message": "hi", "callback": "not a url"})
+
+
+@pytest.mark.parametrize("mime_type", ["image/jpeg", "image/png", "image/gif"])
+def test_accepts_allowed_attachment_types(mime_type: str) -> None:
+    result = SEND_MESSAGE_SCHEMA({"message": "hi", "attachment_type": mime_type})
+    assert result["attachment_type"] == mime_type
+
+
+@pytest.mark.parametrize("mime_type", ["image/webp", "application/pdf", "text/plain"])
+def test_rejects_unsupported_attachment_types(mime_type: str) -> None:
+    with pytest.raises(vol.Invalid):
+        SEND_MESSAGE_SCHEMA({"message": "hi", "attachment_type": mime_type})
