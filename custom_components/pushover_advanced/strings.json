@@ -58,7 +58,8 @@
       }
     },
     "error": {
-      "invalid_key_format": "That doesn't look like a valid 64-character hex AES secret."
+      "invalid_key_format": "That doesn't look like a valid 64-character hex AES secret.",
+      "retry_not_less_than_expire": "Default retry must be less than default expire, otherwise emergency messages would never actually be retried."
     },
     "abort": {
       "no_devices": "No device encryption keys are configured yet."

@@ -38,6 +38,7 @@ from .const import (
     DOMAIN,
     KNOWN_SOUNDS,
     MAX_EXPIRE_SECONDS,
+    MAX_RETRY_SECONDS,
     MIN_RETRY_SECONDS,
 )
 from .crypto import self_test
@@ -217,11 +218,11 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
                 ),
                 vol.Optional(
                     CONF_DEFAULT_TTL, default=current.get(CONF_DEFAULT_TTL, 0)
-                ): NumberSelector(NumberSelectorConfig(min=0, max=2678400, step=1)),
+                ): NumberSelector(NumberSelectorConfig(min=0, step=1)),
                 vol.Optional(
                     CONF_DEFAULT_RETRY, default=current.get(CONF_DEFAULT_RETRY, 60)
                 ): NumberSelector(
-                    NumberSelectorConfig(min=MIN_RETRY_SECONDS, max=MAX_EXPIRE_SECONDS, step=1)
+                    NumberSelectorConfig(min=MIN_RETRY_SECONDS, max=MAX_RETRY_SECONDS, step=1)
                 ),
                 vol.Optional(
                     CONF_DEFAULT_EXPIRE, default=current.get(CONF_DEFAULT_EXPIRE, 3600)
@@ -232,6 +233,12 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
         )
 
         if user_input is not None:
+            if user_input[CONF_DEFAULT_RETRY] >= user_input[CONF_DEFAULT_EXPIRE]:
+                return self.async_show_form(
+                    step_id="defaults",
+                    data_schema=schema,
+                    errors={"base": "retry_not_less_than_expire"},
+                )
             new_options = dict(current)
             new_options.update(user_input)
             if not new_options.get(CONF_DEFAULT_DEVICE):

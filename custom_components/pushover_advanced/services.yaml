@@ -13,7 +13,7 @@ send_message:
           integration: pushover_advanced
     message:
       name: Message
-      description: The message body to send.
+      description: The message body to send, up to 1024 characters.
       required: true
       example: "The garage door has been open for 10 minutes."
       selector:
@@ -21,7 +21,11 @@ send_message:
           multiline: true
     title:
       name: Title
-      description: Message title. Defaults to your application's name if omitted.
+      description: >-
+        Message title, up to 250 characters. Defaults to your application's
+        name if omitted - except when encrypt is enabled, where it defaults
+        to "Home Assistant" instead, since Pushover's own plaintext default
+        title can't be decrypted by the receiving device.
       example: "Garage door"
       selector:
         text:
@@ -53,13 +57,13 @@ send_message:
         text:
     url:
       name: URL
-      description: A supplementary URL to show with the message.
+      description: A supplementary URL to show with the message (must be a valid URL, up to 512 characters).
       example: "https://home.example.com"
       selector:
         text:
     url_title:
       name: URL title
-      description: A title for the supplementary URL, in place of the raw URL.
+      description: A title for the supplementary URL, in place of the raw URL (up to 100 characters).
       example: "Open dashboard"
       selector:
         text:
@@ -91,18 +95,21 @@ send_message:
         boolean:
     ttl:
       name: Time to live
-      description: Seconds after which the message will automatically be deleted from the device.
+      description: >-
+        Seconds after which the message will automatically be deleted from the
+        device. Must be a positive number of seconds; ignored by Pushover for
+        priority 2 (emergency) messages.
       selector:
         number:
-          min: 0
-          max: 2678400
+          min: 1
           unit_of_measurement: seconds
           mode: box
     tags:
       name: Tags
       description: >-
         Tags to attach to the message so pending emergency-priority copies of it
-        can later be cancelled in bulk with cancel_by_tag.
+        can later be cancelled in bulk with cancel_by_tag. 200 characters total
+        once combined.
       example: ["garage-door", "security"]
       selector:
         text:
@@ -114,15 +121,21 @@ send_message:
         text:
     retry:
       name: Retry interval
-      description: Seconds between re-sends of an emergency-priority message (minimum 30). Required if priority is 2.
+      description: >-
+        Seconds between re-sends of an emergency-priority message (minimum 30,
+        maximum 10800, and must be less than expire). Required if priority is 2.
       selector:
         number:
           min: 30
+          max: 10800
           unit_of_measurement: seconds
           mode: box
     expire:
       name: Expire after
-      description: Seconds after which Pushover stops retrying an emergency-priority message (maximum 10800). Required if priority is 2.
+      description: >-
+        Seconds after which Pushover stops retrying an emergency-priority
+        message (maximum 10800, and must be greater than retry). Required if
+        priority is 2.
       selector:
         number:
           min: 1
