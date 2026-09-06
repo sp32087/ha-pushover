@@ -135,8 +135,12 @@ def _install_homeassistant_stub() -> None:
     aiohttp_client = types.ModuleType("homeassistant.helpers.aiohttp_client")
     aiohttp_client.async_get_clientsession = lambda hass: None
 
+    service = types.ModuleType("homeassistant.helpers.service")
+    service.async_set_service_schema = lambda hass, domain, service_name, schema: None
+
     helpers.config_validation = config_validation
     helpers.aiohttp_client = aiohttp_client
+    helpers.service = service
 
     modules = {
         "homeassistant": homeassistant,
@@ -147,6 +151,7 @@ def _install_homeassistant_stub() -> None:
         "homeassistant.helpers": helpers,
         "homeassistant.helpers.config_validation": config_validation,
         "homeassistant.helpers.aiohttp_client": aiohttp_client,
+        "homeassistant.helpers.service": service,
     }
     sys.modules.update(modules)
 

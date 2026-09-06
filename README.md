@@ -86,7 +86,17 @@ rather than blocking you.
 
 The primary way to use this integration — every field maps directly to a
 Pushover Messages API parameter. See `services.yaml` (rendered in the
-Developer Tools → Services UI) for the full field list. Example:
+Developer Tools → Actions UI) for the full field list.
+
+**The `device` and `sound` fields render as an actual dropdown**, not free
+text: whenever an account is set up (or reloaded), the integration fetches
+the current device names and sound catalog for every configured account and
+patches them into the service description, so the Developer Tools and
+automation editor UI list them as selectable options (still with "custom
+value" enabled, so a device or sound added on Pushover's side since the
+last reload can still be typed in). If Pushover is unreachable at setup
+time, these fields just fall back to plain text - `send_message` itself is
+unaffected either way. Example:
 
 ```yaml
 action: pushover_advanced.send_message

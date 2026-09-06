@@ -10,10 +10,13 @@ from __future__ import annotations
 
 import base64
 import binascii
+import copy
 import logging
 from pathlib import Path
+from typing import Any
 
 import voluptuous as vol
+import yaml
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import (
@@ -25,6 +28,7 @@ from homeassistant.core import (
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.service import async_set_service_schema
 
 from .api import PushoverClient, PushoverMessage
 from .const import (
@@ -76,6 +80,7 @@ from .const import (
     SERVICE_SEND_MESSAGE,
 )
 from .crypto import encrypt_field
+from .discovery import fetch_known_devices, fetch_known_sounds
 from .exceptions import PushoverAuthError, PushoverEncryptionError, PushoverError
 
 _LOGGER = logging.getLogger(__name__)
@@ -144,6 +149,81 @@ GET_RECEIPT_SCHEMA = vol.Schema(
     }
 )
 
+_SERVICES_YAML_PATH = Path(__file__).parent / "services.yaml"
+
+
+def _load_send_message_schema() -> dict[str, Any] | None:
+    """Read send_message's static field descriptions back out of services.yaml."""
+    with _SERVICES_YAML_PATH.open(encoding="utf-8") as services_file:
+        services = yaml.safe_load(services_file)
+    return services.get(SERVICE_SEND_MESSAGE)
+
+
+def _patch_send_message_schema(
+    base_schema: dict[str, Any],
+    device_names: list[str],
+    sound_options: list[dict[str, str]],
+) -> dict[str, Any]:
+    """Swap send_message's device/sound text fields for live select menus.
+
+    services.yaml ships plain text fields for device and sound because it's
+    static and can't know a particular account's device names or a
+    particular application's custom sound catalog ahead of time. This
+    returns a copy with select selectors built from every configured
+    account's live data instead, so the Developer Tools / automation editor
+    UI offers them as an actual dropdown. A field is left untouched if the
+    live lookup for it came back empty (e.g. Pushover was unreachable).
+    """
+    schema = copy.deepcopy(base_schema)
+    fields = schema.get("fields", {})
+
+    if device_names and ATTR_DEVICE in fields:
+        fields[ATTR_DEVICE]["selector"] = {
+            "select": {"options": device_names, "multiple": True, "custom_value": True}
+        }
+    if sound_options and ATTR_SOUND in fields:
+        fields[ATTR_SOUND]["selector"] = {
+            "select": {"options": sound_options, "custom_value": True}
+        }
+
+    return schema
+
+
+async def _async_refresh_service_schema(hass: HomeAssistant) -> None:
+    """Best-effort: give send_message's device/sound fields a live dropdown.
+
+    Pulls the device and sound lists from every configured account and
+    merges them into one menu (a service is registered per-domain, not
+    per-account, so there's no single "current" account to scope this to).
+    Never allowed to fail setup - if anything here goes wrong (Pushover
+    unreachable, a future Home Assistant version changing this helper's
+    shape), send_message still works fine with the plain text fields from
+    services.yaml; only the nicer dropdown is lost.
+    """
+    try:
+        clients = list(hass.data.get(DOMAIN, {}).get(DATA_CLIENTS, {}).values())
+        if not clients:
+            return
+
+        device_names: list[str] = []
+        sound_by_key: dict[str, str] = {}
+        for client in clients:
+            for device in await fetch_known_devices(client):
+                if device not in device_names:
+                    device_names.append(device)
+            for option in await fetch_known_sounds(client):
+                sound_by_key.setdefault(option["value"], option["label"])
+        sound_options = [{"value": key, "label": label} for key, label in sound_by_key.items()]
+
+        base_schema = await hass.async_add_executor_job(_load_send_message_schema)
+        if base_schema is None:
+            return
+
+        patched_schema = _patch_send_message_schema(base_schema, device_names, sound_options)
+        async_set_service_schema(hass, DOMAIN, SERVICE_SEND_MESSAGE, patched_schema)
+    except Exception:
+        _LOGGER.debug("Could not build a live device/sound menu for send_message", exc_info=True)
+
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up Pushover Advanced from a config entry."""
@@ -163,6 +243,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
 
     _async_register_services(hass)
+    await _async_refresh_service_schema(hass)
 
     return True
 
