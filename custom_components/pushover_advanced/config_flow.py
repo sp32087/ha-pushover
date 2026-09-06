@@ -14,6 +14,7 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    SelectOptionDict,
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
@@ -37,6 +38,7 @@ from .const import (
     DOMAIN,
     KNOWN_SOUNDS,
     MAX_EXPIRE_SECONDS,
+    MAX_RETRY_SECONDS,
     MIN_RETRY_SECONDS,
 )
 from .crypto import self_test
@@ -61,6 +63,55 @@ async def _validate_credentials(hass, api_token: str, user_key: str) -> None:
     session = async_get_clientsession(hass)
     client = PushoverClient(session, api_token, user_key)
     await client.validate_user()
+
+
+async def _fetch_known_devices(client: PushoverClient) -> list[str]:
+    """Return the device names Pushover knows about for this user or group key.
+
+    For a plain user key, /users/validate.json lists that user's own
+    devices. For a *group* key, the same call doesn't enumerate members, so
+    we also try the /groups/ endpoint, which lists each member's device and
+    succeeds only when user_key is actually a group key. Either call can
+    legitimately fail (e.g. a user key isn't a group), so failures are
+    swallowed rather than surfaced - this is a best-effort convenience list,
+    not a required step.
+    """
+    device_names: list[str] = []
+
+    try:
+        validate_result = await client.validate_user()
+    except (PushoverError, aiohttp.ClientError, TimeoutError):
+        validate_result = {}
+    device_names.extend(validate_result.get("devices", []))
+
+    try:
+        group_result = await client.get_group_info()
+    except (PushoverError, aiohttp.ClientError, TimeoutError):
+        group_result = {}
+    for member in group_result.get("users", []):
+        device = member.get("device")
+        if device:
+            device_names.append(device)
+
+    # De-duplicate while preserving order.
+    return list(dict.fromkeys(device_names))
+
+
+async def _fetch_known_sounds(client: PushoverClient) -> list[SelectOptionDict]:
+    """Return the current Pushover sound catalog as select options.
+
+    Falls back to the last known-good hardcoded list if the API call fails
+    (e.g. offline), so the form still works, just without descriptions.
+    """
+    try:
+        sounds = await client.get_sounds()
+    except (PushoverError, aiohttp.ClientError, TimeoutError):
+        return [SelectOptionDict(value=sound, label=sound) for sound in KNOWN_SOUNDS]
+
+    return [
+        SelectOptionDict(value=key, label=f"{key} — {description}")
+        for key, description in sounds.items()
+    ]
 
 
 class PushoverAdvancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -115,6 +166,14 @@ class PushoverAdvancedConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
     """Manage per-device encryption secrets and sending defaults."""
 
+    def _client(self) -> PushoverClient:
+        session = async_get_clientsession(self.hass)
+        return PushoverClient(
+            session,
+            self.config_entry.data[CONF_API_TOKEN],
+            self.config_entry.data[CONF_USER_KEY],
+        )
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
@@ -129,8 +188,16 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Set the defaults used when a service call doesn't override them."""
         current = self.config_entry.options
-        devices = current.get(CONF_DEVICES, {})
-        device_names = ["", *devices.keys()]
+        configured_devices = current.get(CONF_DEVICES, {})
+
+        client = self._client()
+        live_devices = await _fetch_known_devices(client)
+        sound_options = await _fetch_known_sounds(client)
+
+        # Merge live account devices with ones we already have encryption
+        # keys for (in case the account lookup failed or a device was
+        # removed from the account since), preserving order, then dedupe.
+        device_names = list(dict.fromkeys(["", *live_devices, *configured_devices.keys()]))
 
         schema = vol.Schema(
             {
@@ -147,15 +214,15 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
                 vol.Optional(
                     CONF_DEFAULT_SOUND, default=current.get(CONF_DEFAULT_SOUND, "pushover")
                 ): SelectSelector(
-                    SelectSelectorConfig(options=KNOWN_SOUNDS, custom_value=True)
+                    SelectSelectorConfig(options=sound_options, custom_value=True)
                 ),
                 vol.Optional(
                     CONF_DEFAULT_TTL, default=current.get(CONF_DEFAULT_TTL, 0)
-                ): NumberSelector(NumberSelectorConfig(min=0, max=2678400, step=1)),
+                ): NumberSelector(NumberSelectorConfig(min=0, step=1)),
                 vol.Optional(
                     CONF_DEFAULT_RETRY, default=current.get(CONF_DEFAULT_RETRY, 60)
                 ): NumberSelector(
-                    NumberSelectorConfig(min=MIN_RETRY_SECONDS, max=MAX_EXPIRE_SECONDS, step=1)
+                    NumberSelectorConfig(min=MIN_RETRY_SECONDS, max=MAX_RETRY_SECONDS, step=1)
                 ),
                 vol.Optional(
                     CONF_DEFAULT_EXPIRE, default=current.get(CONF_DEFAULT_EXPIRE, 3600)
@@ -166,6 +233,12 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
         )
 
         if user_input is not None:
+            if user_input[CONF_DEFAULT_RETRY] >= user_input[CONF_DEFAULT_EXPIRE]:
+                return self.async_show_form(
+                    step_id="defaults",
+                    data_schema=schema,
+                    errors={"base": "retry_not_less_than_expire"},
+                )
             new_options = dict(current)
             new_options.update(user_input)
             if not new_options.get(CONF_DEFAULT_DEVICE):
@@ -186,9 +259,16 @@ class PushoverAdvancedOptionsFlow(config_entries.OptionsFlow):
         """
         errors: dict[str, str] = {}
 
+        live_devices = await _fetch_known_devices(self._client())
+        device_name_selector = (
+            SelectSelector(SelectSelectorConfig(options=live_devices, custom_value=True))
+            if live_devices
+            else TextSelector()
+        )
+
         schema = vol.Schema(
             {
-                vol.Required(CONF_DEVICE_NAME): TextSelector(),
+                vol.Required(CONF_DEVICE_NAME): device_name_selector,
                 vol.Required(CONF_ENCRYPTION_KEY): TextSelector(
                     TextSelectorConfig(type=TextSelectorType.PASSWORD)
                 ),

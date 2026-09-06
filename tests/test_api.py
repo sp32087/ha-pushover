@@ -13,6 +13,7 @@ from custom_components.pushover_advanced.api import (
 from custom_components.pushover_advanced.const import (
     API_CANCEL_BY_TAG_URL,
     API_CANCEL_RECEIPT_URL,
+    API_GROUP_URL,
     API_MESSAGES_URL,
     API_RECEIPT_URL,
     API_VALIDATE_URL,
@@ -180,6 +181,39 @@ async def test_get_receipt(client) -> None:
         )
         result = await client.get_receipt("rcpt-1")
         assert result["acknowledged"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_group_info(client) -> None:
+    url = API_GROUP_URL.format(group=USER)
+    with aioresponses() as m:
+        m.get(
+            f"{url}?token={TOKEN}",
+            payload={
+                "status": 1,
+                "name": "Family",
+                "users": [
+                    {"user": "u1", "device": "phone", "memo": "Alice", "disabled": False},
+                    {"user": "u2", "device": "tablet", "memo": "Bob", "disabled": False},
+                ],
+            },
+        )
+        result = await client.get_group_info()
+        assert result["name"] == "Family"
+        assert [u["device"] for u in result["users"]] == ["phone", "tablet"]
+
+
+@pytest.mark.asyncio
+async def test_get_group_info_not_a_group_raises(client) -> None:
+    url = API_GROUP_URL.format(group=USER)
+    with aioresponses() as m:
+        m.get(
+            f"{url}?token={TOKEN}",
+            status=400,
+            payload={"status": 0, "errors": ["group not found"]},
+        )
+        with pytest.raises(PushoverApiError):
+            await client.get_group_info()
 
 
 def test_encode_attachment_base64_round_trip() -> None:

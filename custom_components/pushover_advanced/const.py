@@ -24,6 +24,7 @@ API_SOUNDS_URL = f"{API_BASE_URL}/sounds.json"
 API_RECEIPT_URL = f"{API_BASE_URL}/receipts/{{receipt}}.json"
 API_CANCEL_RECEIPT_URL = f"{API_BASE_URL}/receipts/{{receipt}}/cancel.json"
 API_CANCEL_BY_TAG_URL = f"{API_BASE_URL}/receipts/cancel_by_tag/{{tag}}.json"
+API_GROUP_URL = f"{API_BASE_URL}/groups/{{group}}.json"
 
 ATTR_MESSAGE = "message"
 ATTR_TITLE = "title"
@@ -54,7 +55,9 @@ PRIORITY_HIGH = 1
 PRIORITY_EMERGENCY = 2
 
 MIN_RETRY_SECONDS = 30
-MAX_EXPIRE_SECONDS = 10800
+MAX_EXPIRE_SECONDS = 10800  # 3 hours; Pushover also caps total retries at 50.
+MAX_RETRY_SECONDS = MAX_EXPIRE_SECONDS  # a retry interval longer than expire is meaningless.
+MIN_TTL_SECONDS = 1  # Pushover: "must be a positive number of seconds".
 
 MAX_MESSAGE_LENGTH = 1024
 MAX_TITLE_LENGTH = 250
@@ -62,6 +65,9 @@ MAX_URL_LENGTH = 512
 MAX_URL_TITLE_LENGTH = 100
 MAX_TAGS_LENGTH = 200
 MAX_ATTACHMENT_BYTES = 5_242_880  # 5 MB, current Pushover attachment limit.
+ALLOWED_ATTACHMENT_TYPES = ["image/jpeg", "image/png", "image/gif"]
+
+DEFAULT_ENCRYPTED_TITLE = "Home Assistant"
 
 KNOWN_SOUNDS = [
     "pushover",

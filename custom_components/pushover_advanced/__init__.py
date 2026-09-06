@@ -8,18 +8,27 @@ which are exposed by Home Assistant's built-in Pushover integration.
 """
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
+from pathlib import Path
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, ServiceResponse, SupportsResponse
+from homeassistant.core import (
+    HomeAssistant,
+    ServiceCall,
+    ServiceResponse,
+    SupportsResponse,
+)
 from homeassistant.exceptions import ConfigEntryNotReady, HomeAssistantError
 from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import PushoverClient, PushoverMessage
 from .const import (
+    ALLOWED_ATTACHMENT_TYPES,
     ATTR_ATTACHMENT,
     ATTR_ATTACHMENT_BASE64,
     ATTR_ATTACHMENT_TYPE,
@@ -48,10 +57,18 @@ from .const import (
     CONF_ENCRYPTION_KEY,
     CONF_USER_KEY,
     DATA_CLIENTS,
+    DEFAULT_ENCRYPTED_TITLE,
     DOMAIN,
     MAX_ATTACHMENT_BYTES,
     MAX_EXPIRE_SECONDS,
+    MAX_MESSAGE_LENGTH,
+    MAX_RETRY_SECONDS,
+    MAX_TAGS_LENGTH,
+    MAX_TITLE_LENGTH,
+    MAX_URL_LENGTH,
+    MAX_URL_TITLE_LENGTH,
     MIN_RETRY_SECONDS,
+    MIN_TTL_SECONDS,
     PRIORITY_EMERGENCY,
     SERVICE_CANCEL_BY_TAG,
     SERVICE_CANCEL_RECEIPT,
@@ -67,31 +84,41 @@ PLATFORMS = [Platform.NOTIFY]
 
 CONF_ENTRY = "config_entry_id"
 
+
+def _validate_tags(tags: list[str]) -> list[str]:
+    """Enforce Pushover's combined tags length limit."""
+    if len(",".join(tags)) > MAX_TAGS_LENGTH:
+        raise vol.Invalid(f"tags must total {MAX_TAGS_LENGTH} characters or fewer once joined")
+    return tags
+
+
 SEND_MESSAGE_SCHEMA = vol.Schema(
     {
         vol.Optional(CONF_ENTRY): cv.string,
-        vol.Required(ATTR_MESSAGE): cv.string,
-        vol.Optional(ATTR_TITLE): cv.string,
-        vol.Optional(ATTR_PRIORITY): vol.All(vol.Coerce(int), vol.Range(min=-2, max=2)),
+        vol.Required(ATTR_MESSAGE): vol.All(cv.string, vol.Length(min=1, max=MAX_MESSAGE_LENGTH)),
+        vol.Optional(ATTR_TITLE): vol.All(cv.string, vol.Length(min=1, max=MAX_TITLE_LENGTH)),
+        vol.Optional(ATTR_PRIORITY): vol.All(vol.Coerce(int), vol.In([-2, -1, 0, 1, 2])),
         vol.Optional(ATTR_SOUND): cv.string,
-        vol.Optional(ATTR_URL): cv.string,
-        vol.Optional(ATTR_URL_TITLE): cv.string,
+        vol.Optional(ATTR_URL): vol.All(cv.url, vol.Length(max=MAX_URL_LENGTH)),
+        vol.Optional(ATTR_URL_TITLE): vol.All(
+            cv.string, vol.Length(min=1, max=MAX_URL_TITLE_LENGTH)
+        ),
         vol.Optional(ATTR_DEVICE): vol.All(cv.ensure_list, [cv.string]),
         vol.Optional(ATTR_TIMESTAMP): vol.All(vol.Coerce(int), vol.Range(min=0)),
         vol.Optional(ATTR_HTML): cv.boolean,
         vol.Optional(ATTR_MONOSPACE): cv.boolean,
-        vol.Optional(ATTR_TTL): vol.All(vol.Coerce(int), vol.Range(min=0)),
-        vol.Optional(ATTR_TAGS): vol.All(cv.ensure_list, [cv.string]),
+        vol.Optional(ATTR_TTL): vol.All(vol.Coerce(int), vol.Range(min=MIN_TTL_SECONDS)),
+        vol.Optional(ATTR_TAGS): vol.All(cv.ensure_list, [cv.string], _validate_tags),
         vol.Optional(ATTR_CALLBACK): cv.url,
         vol.Optional(ATTR_RETRY): vol.All(
-            vol.Coerce(int), vol.Range(min=MIN_RETRY_SECONDS)
+            vol.Coerce(int), vol.Range(min=MIN_RETRY_SECONDS, max=MAX_RETRY_SECONDS)
         ),
         vol.Optional(ATTR_EXPIRE): vol.All(
             vol.Coerce(int), vol.Range(min=1, max=MAX_EXPIRE_SECONDS)
         ),
         vol.Optional(ATTR_ATTACHMENT): cv.isfile,
         vol.Optional(ATTR_ATTACHMENT_BASE64): cv.string,
-        vol.Optional(ATTR_ATTACHMENT_TYPE): cv.string,
+        vol.Optional(ATTR_ATTACHMENT_TYPE): vol.In(ALLOWED_ATTACHMENT_TYPES),
         vol.Optional(ATTR_ENCRYPT, default=False): cv.boolean,
     }
 )
@@ -202,10 +229,15 @@ def _maybe_encrypt(entry: ConfigEntry, message: PushoverMessage) -> None:
         )
 
     key_hex = device_options[CONF_ENCRYPTION_KEY]
+    # If no title is given, Pushover fills one in itself (the application's
+    # name) in plaintext - but with encrypted=1 set, the receiving device
+    # tries to decrypt every text field it's handed, title included, and
+    # fails on that plaintext default. Always encrypt an explicit title so
+    # there's nothing left in plaintext for it to choke on.
+    title = message.title if message.title is not None else DEFAULT_ENCRYPTED_TITLE
     try:
         message.message = encrypt_field(message.message, key_hex)
-        if message.title is not None:
-            message.title = encrypt_field(message.title, key_hex)
+        message.title = encrypt_field(title, key_hex)
     except PushoverEncryptionError as err:
         raise HomeAssistantError(f"Encryption failed: {err}") from err
     message.encrypted = True
@@ -230,6 +262,11 @@ async def _async_handle_send_message(hass: HomeAssistant, call: ServiceCall) -> 
                 "priority: 2 (emergency) requires retry and expire, either in the "
                 "service call or as integration defaults."
             )
+        if retry >= expire:
+            raise HomeAssistantError(
+                f"retry ({retry}s) must be less than expire ({expire}s), "
+                "otherwise the message would never actually be retried."
+            )
 
     if ATTR_ATTACHMENT in data and ATTR_ATTACHMENT_BASE64 in data:
         raise HomeAssistantError("Specify either attachment or attachment_base64, not both.")
@@ -239,11 +276,22 @@ async def _async_handle_send_message(hass: HomeAssistant, call: ServiceCall) -> 
         path = data[ATTR_ATTACHMENT]
         if not hass.config.is_allowed_path(path):
             raise HomeAssistantError(f"'{path}' is not an allowed path for attachments.")
-        with open(path, "rb") as attachment_file:
-            attachment_bytes = attachment_file.read()
+        attachment_bytes = await hass.async_add_executor_job(Path(path).read_bytes)
         if len(attachment_bytes) > MAX_ATTACHMENT_BYTES:
             raise HomeAssistantError(
-                f"Attachment exceeds Pushover's {MAX_ATTACHMENT_BYTES} byte limit."
+                f"Attachment exceeds Pushover's {MAX_ATTACHMENT_BYTES} byte "
+                f"({MAX_ATTACHMENT_BYTES / 1_048_576:.1f} MB) limit."
+            )
+
+    if ATTR_ATTACHMENT_BASE64 in data:
+        try:
+            decoded_size = len(base64.b64decode(data[ATTR_ATTACHMENT_BASE64], validate=True))
+        except (binascii.Error, ValueError) as err:
+            raise HomeAssistantError(f"attachment_base64 is not valid base64: {err}") from err
+        if decoded_size > MAX_ATTACHMENT_BYTES:
+            raise HomeAssistantError(
+                f"attachment_base64 decodes to {decoded_size} bytes, which exceeds "
+                f"Pushover's {MAX_ATTACHMENT_BYTES} byte ({MAX_ATTACHMENT_BYTES / 1_048_576:.1f} MB) limit."
             )
 
     message = PushoverMessage(

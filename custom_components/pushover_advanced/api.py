@@ -11,6 +11,7 @@ import aiohttp
 from .const import (
     API_CANCEL_BY_TAG_URL,
     API_CANCEL_RECEIPT_URL,
+    API_GROUP_URL,
     API_MESSAGES_URL,
     API_RECEIPT_URL,
     API_SOUNDS_URL,
@@ -124,6 +125,17 @@ class PushoverClient:
         if device:
             data["device"] = device
         return await self._post_form(API_VALIDATE_URL, data)
+
+    async def get_group_info(self, group_key: str | None = None) -> dict[str, Any]:
+        """Fetch a delivery group's name and member users/devices.
+
+        Only meaningful when the configured user_key is actually a Pushover
+        *group* key rather than a plain user key; raises PushoverApiError
+        (via _parse_response) if it isn't.
+        """
+        url = API_GROUP_URL.format(group=group_key or self._user_key)
+        async with self._session.get(url, params={"token": self._api_token}) as resp:
+            return await self._parse_response(resp)
 
     async def get_sounds(self) -> dict[str, str]:
         """Return the {sound_key: description} mapping Pushover currently supports."""
