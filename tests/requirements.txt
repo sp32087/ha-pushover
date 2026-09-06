@@ -1,0 +1,6 @@
+aiohttp==3.9.5
+cryptography>=41.0.0
+pytest>=7.0
+pytest-asyncio>=0.23
+aioresponses>=0.7.6
+voluptuous>=0.13

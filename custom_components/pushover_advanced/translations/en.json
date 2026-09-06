@@ -1,0 +1,67 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Pushover",
+        "description": "Enter the application token and the user (or group) key for the Pushover account this integration should send as.",
+        "data": {
+          "name": "Name",
+          "api_token": "Application API token",
+          "user_key": "User or group key"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "The application token or user/group key was rejected by Pushover.",
+      "cannot_connect": "Could not reach the Pushover API.",
+      "unknown": "Unexpected error."
+    },
+    "abort": {
+      "already_configured": "This Pushover application/user combination is already configured."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Pushover Advanced options",
+        "menu_options": {
+          "defaults": "Sending defaults",
+          "add_device": "Add a device encryption key",
+          "remove_device": "Remove a device encryption key"
+        }
+      },
+      "defaults": {
+        "title": "Sending defaults",
+        "description": "Used by notify.send_message and as fallbacks for pushover_advanced.send_message.",
+        "data": {
+          "default_device": "Default device",
+          "default_priority": "Default priority",
+          "default_sound": "Default sound",
+          "default_ttl": "Default TTL (seconds, 0 = none)",
+          "default_retry": "Default emergency retry interval (seconds)",
+          "default_expire": "Default emergency expire (seconds)"
+        }
+      },
+      "add_device": {
+        "title": "Add a device encryption key",
+        "description": "Enter the device name exactly as registered with Pushover and the 64-character hex secret shown in the Pushover app once end-to-end encryption is enabled for that device.",
+        "data": {
+          "device_name": "Device name",
+          "encryption_key": "AES secret (64 hex characters)"
+        }
+      },
+      "remove_device": {
+        "title": "Remove a device encryption key",
+        "data": {
+          "device_name": "Device name"
+        }
+      }
+    },
+    "error": {
+      "invalid_key_format": "That doesn't look like a valid 64-character hex AES secret."
+    },
+    "abort": {
+      "no_devices": "No device encryption keys are configured yet."
+    }
+  }
+}

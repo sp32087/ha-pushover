@@ -1,0 +1,208 @@
+send_message:
+  name: Send message
+  description: >-
+    Send a Pushover message using any parameter the Messages API supports,
+    including priority, sound, tags, attachments, and end-to-end encryption.
+  fields:
+    config_entry_id:
+      name: Account
+      description: Which configured Pushover account/app to send from. Only needed if you have more than one.
+      example: "01J8Z..."
+      selector:
+        config_entry:
+          integration: pushover_advanced
+    message:
+      name: Message
+      description: The message body to send.
+      required: true
+      example: "The garage door has been open for 10 minutes."
+      selector:
+        text:
+          multiline: true
+    title:
+      name: Title
+      description: Message title. Defaults to your application's name if omitted.
+      example: "Garage door"
+      selector:
+        text:
+    priority:
+      name: Priority
+      description: >-
+        -2 (no notification/lowest), -1 (quiet), 0 (normal), 1 (high priority,
+        bypasses quiet hours), or 2 (emergency, requires retry and expire).
+      example: 1
+      selector:
+        select:
+          options:
+            - label: "-2 – Lowest (no notification)"
+              value: "-2"
+            - label: "-1 – Low (quiet)"
+              value: "-1"
+            - label: "0 – Normal"
+              value: "0"
+            - label: "1 – High"
+              value: "1"
+            - label: "2 – Emergency"
+              value: "2"
+          mode: dropdown
+    sound:
+      name: Sound
+      description: Notification sound name (e.g. pushover, siren, cosmic, none).
+      example: siren
+      selector:
+        text:
+    url:
+      name: URL
+      description: A supplementary URL to show with the message.
+      example: "https://home.example.com"
+      selector:
+        text:
+    url_title:
+      name: URL title
+      description: A title for the supplementary URL, in place of the raw URL.
+      example: "Open dashboard"
+      selector:
+        text:
+    device:
+      name: Device(s)
+      description: >-
+        One or more device names to target. Required (and limited to exactly
+        one device) when encrypt is enabled.
+      example: ["iphone", "desktop"]
+      selector:
+        text:
+          multiple: true
+    timestamp:
+      name: Timestamp
+      description: Unix timestamp to display instead of the time Pushover received the message.
+      selector:
+        number:
+          min: 0
+          mode: box
+    html:
+      name: HTML formatting
+      description: Treat the message body as HTML.
+      selector:
+        boolean:
+    monospace:
+      name: Monospace formatting
+      description: Render the message body in a monospace font. Cannot be combined with html.
+      selector:
+        boolean:
+    ttl:
+      name: Time to live
+      description: Seconds after which the message will automatically be deleted from the device.
+      selector:
+        number:
+          min: 0
+          max: 2678400
+          unit_of_measurement: seconds
+          mode: box
+    tags:
+      name: Tags
+      description: >-
+        Tags to attach to the message so pending emergency-priority copies of it
+        can later be cancelled in bulk with cancel_by_tag.
+      example: ["garage-door", "security"]
+      selector:
+        text:
+          multiple: true
+    callback:
+      name: Callback URL
+      description: URL Pushover will request when an emergency-priority (priority 2) message is acknowledged.
+      selector:
+        text:
+    retry:
+      name: Retry interval
+      description: Seconds between re-sends of an emergency-priority message (minimum 30). Required if priority is 2.
+      selector:
+        number:
+          min: 30
+          unit_of_measurement: seconds
+          mode: box
+    expire:
+      name: Expire after
+      description: Seconds after which Pushover stops retrying an emergency-priority message (maximum 10800). Required if priority is 2.
+      selector:
+        number:
+          min: 1
+          max: 10800
+          unit_of_measurement: seconds
+          mode: box
+    attachment:
+      name: Attachment file path
+      description: Local path (must be in an allowed directory) to an image to attach.
+      example: "/config/www/snapshot.jpg"
+      selector:
+        text:
+    attachment_base64:
+      name: Attachment (base64)
+      description: Base64-encoded attachment data, as an alternative to attachment.
+      selector:
+        text:
+    attachment_type:
+      name: Attachment MIME type
+      description: MIME type of attachment_base64, e.g. image/jpeg.
+      example: "image/jpeg"
+      selector:
+        text:
+    encrypt:
+      name: Encrypt
+      description: >-
+        Encrypt the message (and title, if set) with the AES secret configured
+        for the single targeted device before sending. Requires exactly one
+        device to be given and a matching secret to already be configured for
+        it in the integration's options.
+      selector:
+        boolean:
+
+cancel_receipt:
+  name: Cancel emergency message by receipt
+  description: Stop further retries/notifications of an emergency-priority (priority 2) message.
+  fields:
+    config_entry_id:
+      name: Account
+      description: Which configured Pushover account/app to use. Only needed if you have more than one.
+      selector:
+        config_entry:
+          integration: pushover_advanced
+    receipt:
+      name: Receipt
+      description: The receipt id returned by send_message for the original emergency-priority message.
+      required: true
+      selector:
+        text:
+
+cancel_by_tag:
+  name: Cancel emergency messages by tag
+  description: Stop further retries/notifications of every pending emergency-priority message carrying a tag.
+  fields:
+    config_entry_id:
+      name: Account
+      description: Which configured Pushover account/app to use. Only needed if you have more than one.
+      selector:
+        config_entry:
+          integration: pushover_advanced
+    tag:
+      name: Tag
+      description: The tag that was set on the original send_message call(s).
+      required: true
+      selector:
+        text:
+
+get_receipt:
+  name: Get emergency message receipt status
+  description: Look up the delivery/acknowledgement status of an emergency-priority message.
+  fields:
+    config_entry_id:
+      name: Account
+      description: Which configured Pushover account/app to use. Only needed if you have more than one.
+      selector:
+        config_entry:
+          integration: pushover_advanced
+    receipt:
+      name: Receipt
+      description: The receipt id returned by send_message for the original emergency-priority message.
+      required: true
+      selector:
+        text:

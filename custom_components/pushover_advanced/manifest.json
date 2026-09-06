@@ -1,0 +1,12 @@
+{
+  "domain": "pushover_advanced",
+  "name": "Pushover Advanced",
+  "codeowners": ["@sp32087"],
+  "config_flow": true,
+  "documentation": "https://github.com/sp32087/ha-pushover",
+  "issue_tracker": "https://github.com/sp32087/ha-pushover/issues",
+  "iot_class": "cloud_push",
+  "integration_type": "service",
+  "requirements": ["cryptography>=41.0.0"],
+  "version": "1.0.0"
+}
