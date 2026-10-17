@@ -66,17 +66,20 @@ def _key_bytes(key_hex: str) -> bytes:
     return bytes.fromhex(validate_key_hex(key_hex))
 
 
-def encrypt_field(plaintext: str, key_hex: str) -> str:
-    """Encrypt a single field value for a device's AES secret.
+def encrypt_bytes(data: bytes, key_hex: str) -> str:
+    """Encrypt raw bytes for a device's AES secret.
 
     Returns the base64-encoded ``iv || ciphertext || hmac`` blob that
-    should be sent in place of the plaintext value.
+    should be sent in place of the plaintext value. This is the same
+    construction encrypt_field uses for text fields, just without the
+    utf-8 encode/decode step, so it can also be used on binary data (e.g.
+    an attachment) - see encrypt_field's docstring for the byte layout.
     """
     key = _key_bytes(key_hex)
     iv = os.urandom(IV_LENGTH_BYTES)
 
     padder = padding.PKCS7(algorithms.AES.block_size).padder()
-    padded = padder.update(plaintext.encode("utf-8")) + padder.finalize()
+    padded = padder.update(data) + padder.finalize()
 
     encryptor = Cipher(algorithms.AES(key), modes.CBC(iv)).encryptor()
     ciphertext = encryptor.update(padded) + encryptor.finalize()
@@ -86,12 +89,8 @@ def encrypt_field(plaintext: str, key_hex: str) -> str:
     return base64.b64encode(iv + ciphertext + tag).decode("ascii")
 
 
-def decrypt_field(value_b64: str, key_hex: str) -> str:
-    """Decrypt a field previously produced by encrypt_field.
-
-    Provided mainly so device secrets can be self-tested (encrypt then
-    decrypt) from the config/options flow before being saved.
-    """
+def decrypt_bytes(value_b64: str, key_hex: str) -> bytes:
+    """Decrypt a value previously produced by encrypt_bytes, returning raw bytes."""
     key = _key_bytes(key_hex)
     raw = base64.b64decode(value_b64)
 
@@ -110,9 +109,25 @@ def decrypt_field(value_b64: str, key_hex: str) -> str:
     padded = decryptor.update(ciphertext) + decryptor.finalize()
 
     unpadder = padding.PKCS7(algorithms.AES.block_size).unpadder()
-    plaintext = unpadder.update(padded) + unpadder.finalize()
+    return unpadder.update(padded) + unpadder.finalize()
 
-    return plaintext.decode("utf-8")
+
+def encrypt_field(plaintext: str, key_hex: str) -> str:
+    """Encrypt a single text field value for a device's AES secret.
+
+    Returns the base64-encoded ``iv || ciphertext || hmac`` blob that
+    should be sent in place of the plaintext value.
+    """
+    return encrypt_bytes(plaintext.encode("utf-8"), key_hex)
+
+
+def decrypt_field(value_b64: str, key_hex: str) -> str:
+    """Decrypt a field previously produced by encrypt_field.
+
+    Provided mainly so device secrets can be self-tested (encrypt then
+    decrypt) from the config/options flow before being saved.
+    """
+    return decrypt_bytes(value_b64, key_hex).decode("utf-8")
 
 
 def self_test(key_hex: str) -> bool:

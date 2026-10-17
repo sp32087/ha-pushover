@@ -39,6 +39,7 @@ from .const import (
     ATTR_CALLBACK,
     ATTR_DEVICE,
     ATTR_ENCRYPT,
+    ATTR_ENCRYPT_ATTACHMENT,
     ATTR_EXPIRE,
     ATTR_HTML,
     ATTR_MESSAGE,
@@ -79,7 +80,7 @@ from .const import (
     SERVICE_GET_RECEIPT,
     SERVICE_SEND_MESSAGE,
 )
-from .crypto import encrypt_field
+from .crypto import encrypt_bytes, encrypt_field
 from .discovery import fetch_known_devices, fetch_known_sounds
 from .exceptions import PushoverAuthError, PushoverEncryptionError, PushoverError
 
@@ -125,6 +126,7 @@ SEND_MESSAGE_SCHEMA = vol.Schema(
         vol.Optional(ATTR_ATTACHMENT_BASE64): cv.string,
         vol.Optional(ATTR_ATTACHMENT_TYPE): vol.In(ALLOWED_ATTACHMENT_TYPES),
         vol.Optional(ATTR_ENCRYPT, default=False): cv.boolean,
+        vol.Optional(ATTR_ENCRYPT_ATTACHMENT, default=False): cv.boolean,
     }
 )
 
@@ -292,8 +294,10 @@ def _client_for_entry(hass: HomeAssistant, entry: ConfigEntry) -> PushoverClient
     return hass.data[DOMAIN][DATA_CLIENTS][entry.entry_id]
 
 
-def _maybe_encrypt(entry: ConfigEntry, message: PushoverMessage) -> None:
-    """Encrypt message/title in place if encryption was requested for this call."""
+def _maybe_encrypt(
+    entry: ConfigEntry, message: PushoverMessage, encrypt_attachment: bool = False
+) -> None:
+    """Encrypt message/title/url in place, and the attachment if asked to."""
     devices = message.device or []
     if len(devices) != 1:
         raise HomeAssistantError(
@@ -309,22 +313,48 @@ def _maybe_encrypt(entry: ConfigEntry, message: PushoverMessage) -> None:
             "Add one from the integration's options before using encrypt: true."
         )
 
-    if message.attachment is not None or message.attachment_base64 is not None:
-        # Confirmed by testing (not just suspected): attachments are
-        # delivered through a completely different path than the push
+    key_hex = device_options[CONF_ENCRYPTION_KEY]
+    has_attachment = message.attachment is not None or message.attachment_base64 is not None
+
+    if has_attachment and not encrypt_attachment:
+        # Confirmed by testing (not just suspected): by default, attachments
+        # are delivered through a completely different path than the push
         # payload's text fields - the device fetches the image separately,
         # after the fact, from Pushover's own servers via a link in the
-        # push payload. There's no way to make that end-to-end from here;
-        # the image sits on Pushover's servers in viewable form regardless
-        # of this flag, so don't let the caller assume otherwise.
+        # push payload. There's no way to make that end-to-end from here
+        # without opting in below; the image sits on Pushover's servers in
+        # viewable form regardless of encrypt: true, so don't let the
+        # caller assume otherwise.
         _LOGGER.warning(
-            "encrypt: true does not cover attachments - the image for this "
-            "message will be visible on Pushover's servers and to the "
-            "recipient device without decryption, even though the message "
-            "text itself is encrypted."
+            "encrypt: true does not cover attachments by default - the image "
+            "for this message will be visible on Pushover's servers and to "
+            "the recipient device without decryption. Pass "
+            "encrypt_attachment: true as well to also encrypt it."
         )
+    elif has_attachment and encrypt_attachment:
+        # Unverified in the other direction: there's no documentation or
+        # confirmed test showing Pushover's app can decrypt an attachment
+        # at all, so this may just produce a broken/unreadable image on
+        # the device even though the upload itself succeeds. Encrypting it
+        # anyway (rather than refusing) is deliberate - it's the only way
+        # to find out for certain, and it does keep the real image off
+        # Pushover's servers either way.
+        _LOGGER.warning(
+            "encrypt_attachment: true - encrypting the attachment before "
+            "sending. This is unverified: if the Pushover app has no way to "
+            "decrypt it, the image may show as broken/unreadable on the "
+            "device even though the upload itself succeeds."
+        )
+        try:
+            if message.attachment is not None:
+                message.attachment_base64 = encrypt_bytes(message.attachment, key_hex)
+                message.attachment = None
+            elif message.attachment_base64 is not None:
+                raw_attachment = base64.b64decode(message.attachment_base64, validate=True)
+                message.attachment_base64 = encrypt_bytes(raw_attachment, key_hex)
+        except (PushoverEncryptionError, binascii.Error) as err:
+            raise HomeAssistantError(f"Attachment encryption failed: {err}") from err
 
-    key_hex = device_options[CONF_ENCRYPTION_KEY]
     # With encrypted=1 set, the receiving device tries to base64-decode and
     # decrypt every displayed text field it's handed - message, title, url,
     # and url_title - so every one of those that's actually present has to
@@ -420,7 +450,7 @@ async def _async_handle_send_message(hass: HomeAssistant, call: ServiceCall) -> 
     )
 
     if data.get(ATTR_ENCRYPT):
-        _maybe_encrypt(entry, message)
+        _maybe_encrypt(entry, message, encrypt_attachment=data.get(ATTR_ENCRYPT_ATTACHMENT, False))
 
     try:
         response = await client.send_message(message)

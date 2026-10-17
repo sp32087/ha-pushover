@@ -190,7 +190,19 @@ send_message:
         defaults to "Home Assistant" if not set). Requires exactly one
         device to be given and a matching secret to already be configured
         for it in the integration's options. sound, tags, and callback are
-        still sent unencrypted.
+        still sent unencrypted. Does not cover an attachment unless
+        encrypt_attachment is also set.
+      selector:
+        boolean:
+    encrypt_attachment:
+      name: Encrypt attachment (experimental)
+      description: >-
+        Only applies when encrypt is also true and an attachment or
+        attachment_base64 is given. Encrypts the attachment the same way as
+        the other fields before sending, so Pushover's servers never see
+        the real image. Unverified whether the Pushover app can actually
+        decrypt and display it - it may just show as a broken/unreadable
+        image on the device even though the upload succeeds.
       selector:
         boolean:
 
