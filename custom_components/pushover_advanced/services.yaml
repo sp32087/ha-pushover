@@ -185,10 +185,12 @@ send_message:
     encrypt:
       name: Encrypt
       description: >-
-        Encrypt the message (and title, if set) with the AES secret configured
-        for the single targeted device before sending. Requires exactly one
-        device to be given and a matching secret to already be configured for
-        it in the integration's options.
+        Encrypt message, title, url, and url_title with the AES secret
+        configured for the single targeted device before sending (title
+        defaults to "Home Assistant" if not set). Requires exactly one
+        device to be given and a matching secret to already be configured
+        for it in the integration's options. sound, tags, and callback are
+        still sent unencrypted.
       selector:
         boolean:
 

@@ -310,15 +310,23 @@ def _maybe_encrypt(entry: ConfigEntry, message: PushoverMessage) -> None:
         )
 
     key_hex = device_options[CONF_ENCRYPTION_KEY]
-    # If no title is given, Pushover fills one in itself (the application's
-    # name) in plaintext - but with encrypted=1 set, the receiving device
-    # tries to decrypt every text field it's handed, title included, and
-    # fails on that plaintext default. Always encrypt an explicit title so
-    # there's nothing left in plaintext for it to choke on.
+    # With encrypted=1 set, the receiving device tries to base64-decode and
+    # decrypt every displayed text field it's handed - message, title, url,
+    # and url_title - so every one of those that's actually present has to
+    # be ciphertext, or the device errors with something like "invalid
+    # base64 in E2EE field" on whichever field was left in plaintext. If no
+    # title is given, Pushover fills one in itself (the application's name)
+    # in plaintext, so title always gets an explicit value here too; url
+    # and url_title are only encrypted when the caller actually supplied
+    # them, since an absent field is never handed to the device at all.
     title = message.title if message.title is not None else DEFAULT_ENCRYPTED_TITLE
     try:
         message.message = encrypt_field(message.message, key_hex)
         message.title = encrypt_field(title, key_hex)
+        if message.url is not None:
+            message.url = encrypt_field(message.url, key_hex)
+        if message.url_title is not None:
+            message.url_title = encrypt_field(message.url_title, key_hex)
     except PushoverEncryptionError as err:
         raise HomeAssistantError(f"Encryption failed: {err}") from err
     message.encrypted = True

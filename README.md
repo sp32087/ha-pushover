@@ -187,7 +187,22 @@ The scheme used (`custom_components/pushover_advanced/crypto.py`) is
 AES-256-CBC with PKCS7 padding and an HMAC-SHA256 authentication tag,
 following Pushover's own description of the feature: a fresh random IV
 per field, `base64(iv || ciphertext || hmac)` sent in place of the
-plaintext `message`/`title` values, with `encrypted=1` set on the request.
+plaintext value, with `encrypted=1` set on the request.
+
+With `encrypted=1` set, the receiving device tries to base64-decode and
+decrypt *every* displayed text field it's handed - so every one of those
+that's actually present in the request has to be ciphertext, or the device
+errors with something like `Error Decrypting: invalid base64 in E2EE
+field` on whichever field was left in plaintext. This integration
+currently encrypts `message`, `title` (defaulting it to "Home Assistant"
+if you didn't set one, since Pushover's own plaintext default title would
+otherwise trip this), `url`, and `url_title` when encryption is enabled.
+`sound`, `tags`, and `callback` are sent as-is (unencrypted) - as far as
+I've been able to confirm, the device treats those as protocol-level
+fields rather than displayed content, but I don't have a way to verify
+that exhaustively. If you get the same "invalid base64" error with one of
+those fields set, that's the tell that it needs encrypting too - please
+open an issue and I'll add it.
 
 **Caveat:** Pushover does not publish a formal machine-readable spec for
 this feature, and this implementation could not be validated end-to-end

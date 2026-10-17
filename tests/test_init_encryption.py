@@ -47,6 +47,31 @@ def test_explicit_title_is_still_encrypted_as_given() -> None:
     assert decrypt_field(message.title, DEVICE_KEY) == "Garage door"
 
 
+def test_url_and_url_title_are_encrypted_when_present() -> None:
+    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
+    message = PushoverMessage(
+        message="hello",
+        device=["phone"],
+        url="https://example.com/dashboard",
+        url_title="Open dashboard",
+    )
+
+    _maybe_encrypt(entry, message)
+
+    assert decrypt_field(message.url, DEVICE_KEY) == "https://example.com/dashboard"
+    assert decrypt_field(message.url_title, DEVICE_KEY) == "Open dashboard"
+
+
+def test_url_stays_absent_when_not_given() -> None:
+    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
+    message = PushoverMessage(message="hello", device=["phone"])
+
+    _maybe_encrypt(entry, message)
+
+    assert message.url is None
+    assert message.url_title is None
+
+
 def test_requires_exactly_one_device() -> None:
     entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
     message = PushoverMessage(message="hello", device=["phone", "tablet"])
