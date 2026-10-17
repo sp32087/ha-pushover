@@ -6,9 +6,7 @@ import base64
 import pytest
 
 from custom_components.pushover_advanced.crypto import (
-    decrypt_bytes,
     decrypt_field,
-    encrypt_bytes,
     encrypt_field,
     self_test,
     validate_key_hex,
@@ -86,17 +84,3 @@ def test_tampered_ciphertext_fails_hmac_check() -> None:
 
 def test_self_test_passes_for_valid_key() -> None:
     assert self_test(VALID_KEY) is True
-
-
-def test_encrypt_bytes_round_trip_on_binary_data() -> None:
-    data = bytes(range(256))  # arbitrary binary content, not valid utf-8
-    ciphertext = encrypt_bytes(data, VALID_KEY)
-    assert decrypt_bytes(ciphertext, VALID_KEY) == data
-
-
-def test_encrypt_bytes_matches_encrypt_field_for_utf8_text() -> None:
-    # encrypt_field is just encrypt_bytes(text.encode("utf-8"), ...); confirm
-    # the two stay interchangeable on the decrypt side.
-    text = "hello"
-    assert decrypt_bytes(encrypt_field(text, VALID_KEY), VALID_KEY) == text.encode("utf-8")
-    assert decrypt_field(encrypt_bytes(text.encode("utf-8"), VALID_KEY), VALID_KEY) == text

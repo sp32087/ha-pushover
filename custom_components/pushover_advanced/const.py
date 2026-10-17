@@ -45,7 +45,6 @@ ATTR_ATTACHMENT = "attachment"
 ATTR_ATTACHMENT_BASE64 = "attachment_base64"
 ATTR_ATTACHMENT_TYPE = "attachment_type"
 ATTR_ENCRYPT = "encrypt"
-ATTR_ENCRYPT_ATTACHMENT = "encrypt_attachment"
 ATTR_RECEIPT = "receipt"
 ATTR_TAG = "tag"
 

@@ -6,7 +6,6 @@ why the package has to be importable without a real homeassistant install.
 """
 from __future__ import annotations
 
-import base64
 import types
 
 import pytest
@@ -19,7 +18,7 @@ from custom_components.pushover_advanced.const import (
     CONF_ENCRYPTION_KEY,
     DEFAULT_ENCRYPTED_TITLE,
 )
-from custom_components.pushover_advanced.crypto import decrypt_bytes, decrypt_field
+from custom_components.pushover_advanced.crypto import decrypt_field
 
 DEVICE_KEY = "ab" * 32
 
@@ -102,48 +101,6 @@ def test_no_attachment_means_no_warning(caplog: pytest.LogCaptureFixture) -> Non
     _maybe_encrypt(entry, message)
 
     assert not any("does not cover attachments" in record.message for record in caplog.records)
-
-
-def test_encrypt_attachment_encrypts_raw_bytes_and_switches_to_base64(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
-    message = PushoverMessage(
-        message="hello", device=["phone"], attachment=b"raw-image-bytes"
-    )
-
-    _maybe_encrypt(entry, message, encrypt_attachment=True)
-
-    assert message.attachment is None
-    assert decrypt_bytes(message.attachment_base64, DEVICE_KEY) == b"raw-image-bytes"
-    assert any(
-        "encrypt_attachment: true" in record.message for record in caplog.records
-    )
-
-
-def test_encrypt_attachment_encrypts_existing_base64() -> None:
-    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
-    plaintext_b64 = base64.b64encode(b"a real jpeg, honest").decode("ascii")
-    message = PushoverMessage(
-        message="hello", device=["phone"], attachment_base64=plaintext_b64
-    )
-
-    _maybe_encrypt(entry, message, encrypt_attachment=True)
-
-    assert message.attachment_base64 != plaintext_b64
-    assert decrypt_bytes(message.attachment_base64, DEVICE_KEY) == b"a real jpeg, honest"
-
-
-def test_encrypt_attachment_false_leaves_default_warning_path(
-    caplog: pytest.LogCaptureFixture,
-) -> None:
-    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
-    message = PushoverMessage(message="hello", device=["phone"], attachment=b"raw")
-
-    _maybe_encrypt(entry, message, encrypt_attachment=False)
-
-    assert message.attachment == b"raw"
-    assert any("does not cover attachments" in record.message for record in caplog.records)
 
 
 def test_requires_exactly_one_device() -> None:

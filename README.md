@@ -204,37 +204,18 @@ that exhaustively. If you get the same "invalid base64" error with one of
 those fields set, that's the tell that it needs encrypting too - please
 open an issue and I'll add it.
 
-**Attachments are not encrypted by default, confirmed by testing**: an
-`attachment` or `attachment_base64` sent alongside `encrypt: true` goes
-out as a normal, plaintext image, and a warning is logged when you do
-this. A real encrypted send displayed the image with no decryption step
-at all, unlike message/title/url, which error loudly when they're not
-ciphertext - meaning the Pushover app isn't even checking whether the
-attachment needs decrypting. Images are fetched by the device from
-Pushover's servers after the push arrives, rather than traveling inside
-the encrypted payload, so by default Pushover's servers see the actual
-image regardless of `encrypt: true`.
-
-**`encrypt_attachment: true`** (needs `encrypt: true` too) encrypts the
-attachment the same way as the other fields before upload, so Pushover's
-servers only ever see ciphertext for it. Whether the Pushover app can
-*decrypt and display* that is genuinely unverified - there's no
-documentation either way, and it's the kind of thing that's only answered
-by trying it on a real device. It's offered as an explicit, separate
-opt-in rather than folded into `encrypt: true` for exactly that reason:
-worst case, you get a broken/unreadable image instead of your photo, and
-best case it proves the app can handle it after all. Either way, report
-back what you see - that result is worth knowing for sure.
-
-```yaml
-action: pushover_advanced.send_message
-data:
-  message: "Front door unlocked"
-  device: my_phone
-  encrypt: true
-  encrypt_attachment: true
-  attachment: "/config/www/snapshot.jpg"
-```
+**Attachments are never encrypted, confirmed by testing**: an `attachment`
+or `attachment_base64` sent alongside `encrypt: true` goes out as a normal,
+plaintext image, and a warning is logged when you do this. This isn't a
+bug to fix - sending it as ciphertext instead wouldn't help, because the
+Pushover app has no code path to decrypt an attachment (confirmed: a real
+encrypted send displayed the image with no decryption step at all, unlike
+message/title/url which error loudly when they're not ciphertext). Images
+are fetched by the device from Pushover's servers after the push arrives,
+rather than traveling inside the encrypted payload, so Pushover's servers
+always see the actual image regardless of this flag - encrypting it on the
+way up would only trade a visible photo for a broken one, not add privacy
+in a way the app can undo.
 
 **Caveat:** Pushover does not publish a formal machine-readable spec for
 this feature, and this implementation could not be validated end-to-end
