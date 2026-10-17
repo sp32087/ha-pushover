@@ -14,11 +14,17 @@ integration leaves out:
 - Looking up a receipt's acknowledgement/delivery status
 - File and base64 attachments
 - Multiple Pushover accounts/applications side by side
-- Optional **per-device end-to-end AES encryption**, so Pushover's servers
+- Optional **per-device end-to-end AES encryption**\*, so Pushover's servers
   and the Apple/Google push transport only ever see ciphertext
 
 A simple `notify.send_message`-compatible entity is also provided for basic
 automations, using each account's configured defaults.
+
+\* Covers `message`, `title`, `url`, and `url_title`. **Attachments are
+never encrypted** - confirmed by testing (see
+[End-to-end encryption](#end-to-end-encryption) below) that the Pushover
+app has no way to decrypt one, so an attached image is always visible to
+Pushover and the recipient regardless of `encrypt: true`.
 
 ## Installation
 
@@ -216,6 +222,15 @@ rather than traveling inside the encrypted payload, so Pushover's servers
 always see the actual image regardless of this flag - encrypting it on the
 way up would only trade a visible photo for a broken one, not add privacy
 in a way the app can undo.
+
+This was also tested directly rather than just assumed: an earlier version
+of this integration had an opt-in `encrypt_attachment` flag that actually
+encrypted the attachment bytes before upload (via both the `attachment`
+file-path and `attachment_base64` input methods). On a real device, the
+image showed up broken/unreadable either way, confirming the app has no
+attachment-decryption path at all - so that option was removed rather
+than kept as a feature nobody could use. There is currently no way to
+make an attachment end-to-end encrypted with this integration.
 
 **Caveat:** Pushover does not publish a formal machine-readable spec for
 this feature, and this implementation could not be validated end-to-end
