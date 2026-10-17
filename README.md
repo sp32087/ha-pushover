@@ -204,6 +204,19 @@ that exhaustively. If you get the same "invalid base64" error with one of
 those fields set, that's the tell that it needs encrypting too - please
 open an issue and I'll add it.
 
+**Attachments are never encrypted, confirmed by testing**: an `attachment`
+or `attachment_base64` sent alongside `encrypt: true` goes out as a normal,
+plaintext image, and a warning is logged when you do this. This isn't a
+bug to fix - sending it as ciphertext instead wouldn't help, because the
+Pushover app has no code path to decrypt an attachment (confirmed: a real
+encrypted send displayed the image with no decryption step at all, unlike
+message/title/url which error loudly when they're not ciphertext). Images
+are fetched by the device from Pushover's servers after the push arrives,
+rather than traveling inside the encrypted payload, so Pushover's servers
+always see the actual image regardless of this flag - encrypting it on the
+way up would only trade a visible photo for a broken one, not add privacy
+in a way the app can undo.
+
 **Caveat:** Pushover does not publish a formal machine-readable spec for
 this feature, and this implementation could not be validated end-to-end
 against a live encrypted device registration while it was written (network

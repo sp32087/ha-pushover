@@ -72,6 +72,37 @@ def test_url_stays_absent_when_not_given() -> None:
     assert message.url_title is None
 
 
+def test_attachment_is_left_unencrypted_but_warns(caplog: pytest.LogCaptureFixture) -> None:
+    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
+    message = PushoverMessage(message="hello", device=["phone"], attachment=b"raw-image-bytes")
+
+    _maybe_encrypt(entry, message)
+
+    assert message.attachment == b"raw-image-bytes"
+    assert any("does not cover attachments" in record.message for record in caplog.records)
+
+
+def test_attachment_base64_also_warns(caplog: pytest.LogCaptureFixture) -> None:
+    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
+    message = PushoverMessage(
+        message="hello", device=["phone"], attachment_base64="ZGF0YQ=="
+    )
+
+    _maybe_encrypt(entry, message)
+
+    assert message.attachment_base64 == "ZGF0YQ=="
+    assert any("does not cover attachments" in record.message for record in caplog.records)
+
+
+def test_no_attachment_means_no_warning(caplog: pytest.LogCaptureFixture) -> None:
+    entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
+    message = PushoverMessage(message="hello", device=["phone"])
+
+    _maybe_encrypt(entry, message)
+
+    assert not any("does not cover attachments" in record.message for record in caplog.records)
+
+
 def test_requires_exactly_one_device() -> None:
     entry = _entry({"phone": {CONF_ENCRYPTION_KEY: DEVICE_KEY}})
     message = PushoverMessage(message="hello", device=["phone", "tablet"])

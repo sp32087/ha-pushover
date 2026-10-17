@@ -309,6 +309,21 @@ def _maybe_encrypt(entry: ConfigEntry, message: PushoverMessage) -> None:
             "Add one from the integration's options before using encrypt: true."
         )
 
+    if message.attachment is not None or message.attachment_base64 is not None:
+        # Confirmed by testing (not just suspected): attachments are
+        # delivered through a completely different path than the push
+        # payload's text fields - the device fetches the image separately,
+        # after the fact, from Pushover's own servers via a link in the
+        # push payload. There's no way to make that end-to-end from here;
+        # the image sits on Pushover's servers in viewable form regardless
+        # of this flag, so don't let the caller assume otherwise.
+        _LOGGER.warning(
+            "encrypt: true does not cover attachments - the image for this "
+            "message will be visible on Pushover's servers and to the "
+            "recipient device without decryption, even though the message "
+            "text itself is encrypted."
+        )
+
     key_hex = device_options[CONF_ENCRYPTION_KEY]
     # With encrypted=1 set, the receiving device tries to base64-decode and
     # decrypt every displayed text field it's handed - message, title, url,
